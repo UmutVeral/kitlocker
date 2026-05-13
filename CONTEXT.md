@@ -42,3 +42,33 @@ A derived grouping of collectors who share the same team affiliation in their Lo
 - A marketplace (V2)
 - A value/price tracker (V2)
 - A web app (Showcase web preview only)
+
+## Flutter Project Structure
+
+```
+lib/
+  app.dart                          ← KitLockerApp (ConsumerWidget, MaterialApp.router)
+  main.dart                         ← entry point, ProviderScope
+  core/
+    auth/
+      auth_state.dart               ← sealed AuthState (AuthLoading | Authenticated | Unauthenticated)
+      auth_state_provider.dart      ← StateProvider<AuthState>
+    routing/
+      app_router.dart               ← routerProvider (GoRouter)
+      router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge)
+  features/
+    auth/screens/auth_screen.dart
+    home/screens/home_screen.dart
+    splash/screens/splash_screen.dart
+    locker/ | feed/ | showcase/ | social/ | notifications/
+  l10n/
+    app_en.arb | app_tr.arb         ← string kaynakları
+    app_localizations.dart          ← flutter gen-l10n çıktısı
+test/
+  core/routing/app_router_test.dart ← auth redirect davranışları (3 test)
+  features/home/home_screen_test.dart ← TR/EN lokalizasyon (2 test)
+```
+
+**Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`
+
+**Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
