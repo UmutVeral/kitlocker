@@ -1,0 +1,7 @@
+{
+  "@@locale": "en",
+  "homeGreeting": "Welcome to KitLocker",
+  "@homeGreeting": {
+    "description": "Greeting shown on the home screen"
+  }
+}
