@@ -56,8 +56,9 @@ lib/
       auth_state_provider.dart      ← re-export shim (authStateProvider, AuthNotifier)
       username_validator.dart       ← UsernameValidator.validate(String) → String? (regex: ^[a-zA-Z0-9_]{3,30}$)
     routing/
-      app_router.dart               ← routerProvider (GoRouter)
-      router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge)
+      app_routes.dart               ← AppRoutes sabitleri (splash, auth, home path string'leri)
+      app_router.dart               ← routerProvider (GoRouter), AppRoutes kullanır
+      router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge), AppRoutes kullanır
   features/
     auth/screens/auth_screen.dart   ← TabBar (Kayıt Ol / Giriş Yap), Form + validation, Riverpod
     home/screens/home_screen.dart
@@ -67,6 +68,8 @@ lib/
     app_en.arb | app_tr.arb         ← string kaynakları
     app_localizations.dart          ← flutter gen-l10n çıktısı
 test/
+  helpers/
+    auth_fakes.dart                       ← FakeAuthNotifier (paylaşılan test fake, tüm auth testleri kullanır)
   core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
   core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)

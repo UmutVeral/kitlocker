@@ -11,7 +11,25 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(gh label *)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(flutter --version)",
+      "PowerShell(flutter *)",
+      "PowerShell(winget *)",
+      "PowerShell(choco search *)",
+      "PowerShell(choco install *)",
+      "PowerShell(Get-Command *)",
+      "PowerShell(& \"C:\\\\tools\\\\flutter\\\\bin\\\\flutter.bat\" create . --project-name kitlocker --org com.kitlocker --platforms ios,android 2>&1)",
+      "Skill(improve-codebase-architecture)",
+      "Bash(xargs wc -l)",
+      "Bash(flutter pub *)",
+      "PowerShell(docker --version; node --version; npx --version)",
+      "PowerShell(claude mcp *)",
+      "mcp__github__get_issue",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__apply_migration",
+      "mcp__github__update_issue",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
