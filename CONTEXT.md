@@ -54,11 +54,12 @@ lib/
       auth_state.dart               ← sealed AuthState (AuthLoading | Authenticated | Unauthenticated | AuthError)
       auth_notifier.dart            ← AuthNotifier (Notifier<AuthState>) + authStateProvider
       auth_state_provider.dart      ← re-export shim (authStateProvider, AuthNotifier)
+      username_validator.dart       ← UsernameValidator.validate(String) → String? (regex: ^[a-zA-Z0-9_]{3,30}$)
     routing/
       app_router.dart               ← routerProvider (GoRouter)
       router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge)
   features/
-    auth/screens/auth_screen.dart
+    auth/screens/auth_screen.dart   ← TabBar (Kayıt Ol / Giriş Yap), Form + validation, Riverpod
     home/screens/home_screen.dart
     splash/screens/splash_screen.dart
     locker/ | feed/ | showcase/ | social/ | notifications/
@@ -66,15 +67,37 @@ lib/
     app_en.arb | app_tr.arb         ← string kaynakları
     app_localizations.dart          ← flutter gen-l10n çıktısı
 test/
-  core/routing/app_router_test.dart ← auth redirect davranışları (4 test, _FakeAuthNotifier ile)
-  features/home/home_screen_test.dart ← TR/EN lokalizasyon (2 test)
-  widget_test.dart                  ← smoke test
+  core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
+  core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
+  features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
+  features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
+  widget_test.dart                        ← smoke test
+supabase/
+  migrations/
+    20260514010614_create_profiles.sql    ← profiles tablosu, citext, unique index, RLS
+    20260514010622_username_cooldown.sql  ← update_username() fonksiyonu, 30 gün cooldown
 ```
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
 
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` içinde `supabase.auth.onAuthStateChange` stream'i dinler, başlangıç state'i `AuthLoading`. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
-**Test override pattern:** `_FakeAuthNotifier extends AuthNotifier` — `build()` override ederek Supabase'siz sabit state döner. `authStateProvider.overrideWith(() => _FakeAuthNotifier(initialState))`
+**Test override pattern:** `_FakeAuthNotifier extends AuthNotifier` — `build()` ve `register()`/`signIn()` override ederek Supabase'siz çalışır. Widget testlerinde `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulanır.
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
+
+**UsernameValidator:** `lib/core/auth/username_validator.dart` — pure Dart, regex `^[a-zA-Z0-9_]{3,30}$`. `validate(String) → String?` döner (null = geçerli). Form `validator:` callback'ine doğrudan bağlanır.
+
+## Supabase Schema (V1)
+
+### profiles
+| Kolon | Tip | Kısıt |
+|-------|-----|-------|
+| id | uuid | PK, FK → auth.users(id) ON DELETE CASCADE |
+| username | citext | NOT NULL, 3–30 karakter, `^[a-zA-Z0-9_]+$`, UNIQUE |
+| username_updated_at | timestamptz | DEFAULT now() — cooldown takibi |
+| created_at | timestamptz | DEFAULT now() |
+
+RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_own` / `profiles_update_own` (sadece kendi kaydı).
+
+`update_username(new_username citext)` — SECURITY DEFINER fonksiyon. 30 gün geçmemişse `raise exception` ile reddeder. Sadece `authenticated` role çağırabilir.
