@@ -12,8 +12,16 @@ class LockerEntryDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final entries = ref.watch(lockerEntriesProvider);
-    final entry = entries.where((e) => e.id == id).firstOrNull;
+    final entriesAsync = ref.watch(lockerEntriesProvider);
+
+    if (entriesAsync.isLoading) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final entry = entriesAsync.valueOrNull?.where((e) => e.id == id).firstOrNull;
 
     if (entry == null) {
       return Scaffold(

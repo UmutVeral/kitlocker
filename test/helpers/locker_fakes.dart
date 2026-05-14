@@ -1,3 +1,4 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:kitlocker/features/locker/models/locker_condition.dart';
 import 'package:kitlocker/features/locker/models/locker_entry.dart';
 import 'package:kitlocker/features/locker/providers/locker_entries_notifier.dart';
@@ -21,7 +22,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
   String? lastToggleFavouriteCall;
 
   @override
-  List<LockerEntry> build() => List.of(_initial);
+  Future<List<LockerEntry>> build() async => List.of(_initial);
 
   @override
   Future<void> add({
@@ -41,7 +42,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
       notes: notes,
     );
     final entry = LockerEntry(
-      id: 'fake-${state.length}',
+      id: 'fake-${state.valueOrNull?.length ?? 0}',
       userId: 'fake-user',
       teamName: teamName,
       season: season,
@@ -52,28 +53,32 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
       number: number,
       notes: notes,
     );
-    state = sortLockerEntries([entry, ...state]);
+    final current = state.valueOrNull ?? [];
+    state = AsyncData(sortLockerEntries([entry, ...current]));
   }
 
   @override
   Future<void> remove(String id) async {
     lastRemoveCall = id;
-    state = state.where((e) => e.id != id).toList();
+    final current = state.valueOrNull ?? [];
+    state = AsyncData(current.where((e) => e.id != id).toList());
   }
 
   @override
-  Future<void> update(LockerEntry entry) async {
+  Future<void> updateEntry(LockerEntry entry) async {
     lastUpdateCall = entry;
-    state = sortLockerEntries(
-      state.map((e) => e.id == entry.id ? entry : e).toList(),
-    );
+    final current = state.valueOrNull ?? [];
+    state = AsyncData(sortLockerEntries(
+      current.map((e) => e.id == entry.id ? entry : e).toList(),
+    ));
   }
 
   @override
   Future<void> toggleFavourite(String id) async {
     lastToggleFavouriteCall = id;
-    final entry = state.firstWhere((e) => e.id == id);
-    await update(entry.copyWith(isFavourite: !entry.isFavourite));
+    final current = state.valueOrNull ?? [];
+    final entry = current.firstWhere((e) => e.id == id);
+    await updateEntry(entry.copyWith(isFavourite: !entry.isFavourite));
   }
 }
 

@@ -102,13 +102,13 @@ supabase/
 
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` içinde `supabase.auth.onAuthStateChange` stream'i dinler, başlangıç state'i `AuthLoading`. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
-**LockerEntriesNotifier pattern:** `Notifier<List<LockerEntry>>` — `build()` fire-and-forget `_load()` tetikler (Supabase'den çeker, RLS userId filtresi), başlangıç state'i `[]`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?})`, `remove(id)`, `update(LockerEntry)`, `toggleFavourite(id)`. Her state güncellemesi `sortLockerEntries()` üzerinden geçer. `lockerEntriesProvider = NotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
+**LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?})`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
 
 **sortLockerEntries:** `lib/features/locker/providers/locker_entries_notifier.dart`'da top-level pure function. Sıralama: `isFavourite: true` önce, sonra `createdAt` desc. Hem notifier hem test fake aynı fonksiyonu kullanır.
 
 **Test override pattern (auth):** `authStateProvider.overrideWith(() => FakeAuthNotifier())` — `FakeAuthNotifier extends AuthNotifier`, `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulama.
 
-**Test override pattern (locker):** `lockerEntriesProvider.overrideWith(() => FakeLockerEntriesNotifier(initial))` — `FakeLockerEntriesNotifier extends LockerEntriesNotifier`, `build()` override ederek Supabase'siz çalışır, `lastAddCall` / `lastRemoveCall` / `lastUpdateCall` / `lastToggleFavouriteCall` alanları ile çağrı doğrulama. `fakeEntry({id, teamName, season, condition, isFavourite, createdAt})` builder fonksiyonu ile test verisi oluşturulur.
+**Test override pattern (locker):** `lockerEntriesProvider.overrideWith(() => FakeLockerEntriesNotifier(initial))` — `FakeLockerEntriesNotifier extends LockerEntriesNotifier`, `build()` `async => List.of(_initial)` ile Supabase'siz çalışır. Unit testlerde `await container.read(lockerEntriesProvider.future)` ile ilk yükleme beklenir. Capture alanları: `lastAddCall` / `lastRemoveCall` / `lastUpdateCall` / `lastToggleFavouriteCall`. Mutasyonlar `state.valueOrNull ?? []` kullanır (widget testlerinde provider henüz başlatılmamış olabilir). `fakeEntry({id, teamName, season, condition, isFavourite, createdAt})` builder fonksiyonu ile test verisi oluşturulur.
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
 

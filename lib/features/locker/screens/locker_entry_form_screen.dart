@@ -62,7 +62,7 @@ class _LockerEntryFormScreenState
         notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
       );
     } else {
-      await notifier.update(
+      await notifier.updateEntry(
         widget.existing!.copyWith(
           teamName: _teamName.text.trim(),
           season: _season.text.trim(),
