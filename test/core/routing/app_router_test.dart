@@ -1,19 +1,11 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kitlocker/app.dart';
-import 'package:kitlocker/core/auth/auth_notifier.dart';
 import 'package:kitlocker/core/auth/auth_state.dart';
 import 'package:kitlocker/core/auth/auth_state_provider.dart';
 import 'package:kitlocker/features/auth/screens/auth_screen.dart';
 import 'package:kitlocker/features/home/screens/home_screen.dart';
-
-class _FakeAuthNotifier extends AuthNotifier {
-  _FakeAuthNotifier(this._initial);
-  final AuthState _initial;
-
-  @override
-  AuthState build() => _initial;
-}
+import '../../helpers/auth_fakes.dart';
 
 void main() {
   group('AppRouter redirect', () {
@@ -23,7 +15,7 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider
-                .overrideWith(() => _FakeAuthNotifier(const Unauthenticated())),
+                .overrideWith(() => FakeAuthNotifier(const Unauthenticated())),
           ],
           child: const KitLockerApp(),
         ),
@@ -39,7 +31,7 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith(
-              () => _FakeAuthNotifier(
+              () => FakeAuthNotifier(
                 const Authenticated(userId: 'test-user-123'),
               ),
             ),
@@ -58,7 +50,7 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider
-                .overrideWith(() => _FakeAuthNotifier(const AuthLoading())),
+                .overrideWith(() => FakeAuthNotifier(const AuthLoading())),
           ],
           child: const KitLockerApp(),
         ),
@@ -74,7 +66,7 @@ void main() {
         ProviderScope(
           overrides: [
             authStateProvider.overrideWith(
-              () => _FakeAuthNotifier(
+              () => FakeAuthNotifier(
                 const AuthError(message: 'Invalid credentials'),
               ),
             ),

@@ -2,40 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:kitlocker/core/auth/auth_notifier.dart';
-import 'package:kitlocker/core/auth/auth_state.dart';
 import 'package:kitlocker/core/auth/auth_state_provider.dart';
 import 'package:kitlocker/features/auth/screens/auth_screen.dart';
 import 'package:kitlocker/l10n/app_localizations.dart';
+import '../../helpers/auth_fakes.dart';
 
-class _FakeAuthNotifier extends AuthNotifier {
-  ({String email, String password, String username})? lastRegisterCall;
-  ({String email, String password})? lastSignInCall;
-
-  @override
-  AuthState build() => const Unauthenticated();
-
-  @override
-  Future<void> register({
-    required String email,
-    required String password,
-    required String username,
-  }) async {
-    lastRegisterCall = (email: email, password: password, username: username);
-  }
-
-  @override
-  Future<void> signIn({
-    required String email,
-    required String password,
-  }) async {
-    lastSignInCall = (email: email, password: password);
-  }
-}
-
-Widget _wrap(Widget child, ProviderScope scope) => scope;
-
-Widget _buildTestApp(_FakeAuthNotifier notifier) {
+Widget _buildTestApp(FakeAuthNotifier notifier) {
   return ProviderScope(
     overrides: [
       authStateProvider.overrideWith(() => notifier),
@@ -54,9 +26,9 @@ Widget _buildTestApp(_FakeAuthNotifier notifier) {
 
 void main() {
   group('AuthScreen — Sign-up formu', () {
-    late _FakeAuthNotifier notifier;
+    late FakeAuthNotifier notifier;
 
-    setUp(() => notifier = _FakeAuthNotifier());
+    setUp(() => notifier = FakeAuthNotifier());
 
     testWidgets('sign-up sekmesinde email, şifre ve username alanları var',
         (tester) async {
@@ -110,9 +82,9 @@ void main() {
   });
 
   group('AuthScreen — Sign-in formu', () {
-    late _FakeAuthNotifier notifier;
+    late FakeAuthNotifier notifier;
 
-    setUp(() => notifier = _FakeAuthNotifier());
+    setUp(() => notifier = FakeAuthNotifier());
 
     testWidgets('giriş sekmesinde email ve şifre alanları var',
         (tester) async {

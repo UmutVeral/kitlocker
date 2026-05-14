@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../auth/auth_state.dart';
 import '../auth/auth_state_provider.dart';
+import 'app_routes.dart';
 
 class RouterNotifier extends ChangeNotifier {
   RouterNotifier(this._ref) {
@@ -16,11 +17,16 @@ class RouterNotifier extends ChangeNotifier {
     final location = state.matchedLocation;
 
     return switch (authState) {
-      AuthLoading() => location == '/splash' ? null : '/splash',
+      AuthLoading() =>
+        location == AppRoutes.splash ? null : AppRoutes.splash,
       Authenticated() =>
-        (location == '/auth' || location == '/splash') ? '/home' : null,
-      Unauthenticated() => location == '/auth' ? null : '/auth',
-      AuthError() => location == '/auth' ? null : '/auth',
+        (location == AppRoutes.auth || location == AppRoutes.splash)
+            ? AppRoutes.home
+            : null,
+      Unauthenticated() =>
+        location == AppRoutes.auth ? null : AppRoutes.auth,
+      AuthError() =>
+        location == AppRoutes.auth ? null : AppRoutes.auth,
     };
   }
 }
