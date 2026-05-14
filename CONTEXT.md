@@ -56,36 +56,59 @@ lib/
       auth_state_provider.dart      ← re-export shim (authStateProvider, AuthNotifier)
       username_validator.dart       ← UsernameValidator.validate(String) → String? (regex: ^[a-zA-Z0-9_]{3,30}$)
     routing/
-      app_routes.dart               ← AppRoutes sabitleri (splash, auth, home path string'leri)
+      app_routes.dart               ← AppRoutes sabitleri (splash, auth, home, locker, lockerAdd, lockerDetail)
       app_router.dart               ← routerProvider (GoRouter), AppRoutes kullanır
       router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge), AppRoutes kullanır
   features/
     auth/screens/auth_screen.dart   ← TabBar (Kayıt Ol / Giriş Yap), Form + validation, Riverpod
     home/screens/home_screen.dart
     splash/screens/splash_screen.dart
-    locker/ | feed/ | showcase/ | social/ | notifications/
+    locker/
+      models/
+        locker_condition.dart       ← enum LockerCondition { mint, excellent, good, worn }
+        locker_entry.dart           ← LockerEntry (immutable data class, fromJson/toJson/copyWith)
+      providers/
+        locker_entries_notifier.dart ← LockerEntriesNotifier + sortLockerEntries() + lockerEntriesProvider
+      screens/
+        locker_screen.dart          ← grid view, kit count header, FAB → /locker/add
+        locker_entry_form_screen.dart ← add/edit formu, validation (takım, sezon, condition, oyuncu, numara, notlar)
+        locker_entry_detail_screen.dart ← detay, favori toggle, düzenleme, confirmation delete
+    feed/ | showcase/ | social/ | notifications/
   l10n/
     app_en.arb | app_tr.arb         ← string kaynakları
     app_localizations.dart          ← flutter gen-l10n çıktısı
 test/
   helpers/
     auth_fakes.dart                       ← FakeAuthNotifier (paylaşılan test fake, tüm auth testleri kullanır)
+    locker_fakes.dart                     ← FakeLockerEntriesNotifier + fakeEntry() yardımcısı
   core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
   core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
   features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
+  features/locker/
+    locker_entries_notifier_test.dart     ← 8 unit test (sortLockerEntries + state transitions)
+    locker_screen_test.dart               ← 6 widget test (grid, header count, form submit, validation)
   widget_test.dart                        ← smoke test
 supabase/
   migrations/
     20260514010614_create_profiles.sql    ← profiles tablosu, citext, unique index, RLS
     20260514010622_username_cooldown.sql  ← update_username() fonksiyonu, 30 gün cooldown
+    20260514000003_create_locker_entries.sql ← locker_entries tablosu, RLS (select/insert/update/delete own)
 ```
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
 
+**AppRoutes:** `abstract final class` — `splash`, `auth`, `home` path sabitleri + `locker = '/locker'`, `lockerAdd = '/locker/add'`, `lockerDetail(String id) → '/locker/$id'`. GoRouter'da `/locker` altında `add` ve `:id` alt rotalar nested tanımlı.
+
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` içinde `supabase.auth.onAuthStateChange` stream'i dinler, başlangıç state'i `AuthLoading`. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
-**Test override pattern:** `_FakeAuthNotifier extends AuthNotifier` — `build()` ve `register()`/`signIn()` override ederek Supabase'siz çalışır. Widget testlerinde `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulanır.
+**LockerEntriesNotifier pattern:** `Notifier<List<LockerEntry>>` — `build()` fire-and-forget `_load()` tetikler (Supabase'den çeker, RLS userId filtresi), başlangıç state'i `[]`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?})`, `remove(id)`, `update(LockerEntry)`, `toggleFavourite(id)`. Her state güncellemesi `sortLockerEntries()` üzerinden geçer. `lockerEntriesProvider = NotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
+
+**sortLockerEntries:** `lib/features/locker/providers/locker_entries_notifier.dart`'da top-level pure function. Sıralama: `isFavourite: true` önce, sonra `createdAt` desc. Hem notifier hem test fake aynı fonksiyonu kullanır.
+
+**Test override pattern (auth):** `authStateProvider.overrideWith(() => FakeAuthNotifier())` — `FakeAuthNotifier extends AuthNotifier`, `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulama.
+
+**Test override pattern (locker):** `lockerEntriesProvider.overrideWith(() => FakeLockerEntriesNotifier(initial))` — `FakeLockerEntriesNotifier extends LockerEntriesNotifier`, `build()` override ederek Supabase'siz çalışır, `lastAddCall` / `lastRemoveCall` / `lastUpdateCall` / `lastToggleFavouriteCall` alanları ile çağrı doğrulama. `fakeEntry({id, teamName, season, condition, isFavourite, createdAt})` builder fonksiyonu ile test verisi oluşturulur.
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
 
@@ -104,3 +127,25 @@ supabase/
 RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_own` / `profiles_update_own` (sadece kendi kaydı).
 
 `update_username(new_username citext)` — SECURITY DEFINER fonksiyon. 30 gün geçmemişse `raise exception` ile reddeder. Sadece `authenticated` role çağırabilir.
+
+### locker_entries
+| Kolon | Tip | Kısıt |
+|-------|-----|-------|
+| id | uuid | PK, DEFAULT gen_random_uuid() |
+| user_id | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE |
+| kit_catalog_id | uuid | nullable — gelecekte FKAPI entegrasyonu |
+| team_name | text | NOT NULL |
+| league_id | uuid | nullable |
+| season | text | NOT NULL |
+| player_name | text | nullable |
+| number | text | nullable |
+| condition | text | NOT NULL, CHECK IN ('mint','excellent','good','worn') |
+| notes | text | nullable |
+| photos | text[] | NOT NULL DEFAULT '{}' |
+| visualization_url | text | nullable — Ghost Mannequin render URL'i |
+| is_favourite | boolean | NOT NULL DEFAULT false |
+| created_at | timestamptz | NOT NULL DEFAULT now() |
+
+RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı (kullanıcı sadece kendi entry'lerini görür/yazar/günceller/siler).
+
+**Dart model:** `LockerEntry` — `fromJson(Map)` snake_case → camelCase, `toJson()` insert/update payload için (id ve created_at hariç), `copyWith(...)` immutable güncelleme. `LockerCondition` enum'u `.name` ile serileşir.
