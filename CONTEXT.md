@@ -48,7 +48,7 @@ A derived grouping of collectors who share the same team affiliation in their Lo
 ```
 lib/
   app.dart                          ← KitLockerApp (ConsumerWidget, MaterialApp.router)
-  main.dart                         ← entry point, ProviderScope
+  main.dart                         ← async entry point: WidgetsFlutterBinding.ensureInitialized() → Supabase.initialize(url, anonKey) → runApp(ProviderScope)
   core/
     auth/
       auth_state.dart               ← sealed AuthState (AuthLoading | Authenticated | Unauthenticated | AuthError)
@@ -61,7 +61,7 @@ lib/
       router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge), AppRoutes kullanır
   features/
     auth/screens/auth_screen.dart   ← TabBar (Kayıt Ol / Giriş Yap), Form + validation, Riverpod
-    home/screens/home_screen.dart
+    home/screens/home_screen.dart   ← homeGreeting metni + "Locker'ıma Git" butonu (context.go(AppRoutes.locker))
     splash/screens/splash_screen.dart
     locker/
       models/
@@ -91,16 +91,19 @@ test/
   widget_test.dart                        ← smoke test
 supabase/
   migrations/
-    20260514010614_create_profiles.sql    ← profiles tablosu, citext, unique index, RLS
-    20260514010622_username_cooldown.sql  ← update_username() fonksiyonu, 30 gün cooldown
-    20260514000003_create_locker_entries.sql ← locker_entries tablosu, RLS (select/insert/update/delete own)
+    20260514000001_create_profiles.sql          ← profiles tablosu, citext, unique index, RLS
+    20260514000002_username_cooldown.sql         ← update_username() fonksiyonu, 30 gün cooldown
+    20260514000003_create_locker_entries.sql     ← locker_entries tablosu, RLS (select/insert/update/delete own)
+    20260514233219_profiles_rls_insert_policy.sql    ← profiles INSERT policy (authenticated role)
+    20260514234158_grant_profiles_to_authenticated.sql   ← GRANT SELECT/INSERT/UPDATE on profiles
+    20260514234544_grant_locker_entries_to_authenticated.sql ← GRANT SELECT/INSERT/UPDATE/DELETE on locker_entries
 ```
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
 
 **AppRoutes:** `abstract final class` — `splash`, `auth`, `home` path sabitleri + `locker = '/locker'`, `lockerAdd = '/locker/add'`, `lockerDetail(String id) → '/locker/$id'`. GoRouter'da `/locker` altında `add` ve `:id` alt rotalar nested tanımlı.
 
-**AuthNotifier pattern:** `Notifier<AuthState>` — `build()` içinde `supabase.auth.onAuthStateChange` stream'i dinler, başlangıç state'i `AuthLoading`. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
+**AuthNotifier pattern:** `Notifier<AuthState>` — `build()` önce `_supabase.auth.currentSession`'ı senkron okur (null → `Unauthenticated`, non-null → `Authenticated`), ardından `onAuthStateChange` stream'i dinler. `AuthLoading` artık sadece geçiş anında kullanılır, başlangıç state'i değil. `register()` e-posta doğrulama gerektiren durumda (`session == null`) `AuthError('E-posta adresinizi doğrulayın.')` döner. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
 **LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?})`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
 
@@ -124,7 +127,7 @@ supabase/
 | username_updated_at | timestamptz | DEFAULT now() — cooldown takibi |
 | created_at | timestamptz | DEFAULT now() |
 
-RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_own` / `profiles_update_own` (sadece kendi kaydı).
+RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_own` / `profiles_update_own` / `users can insert own profile` (sadece kendi kaydı). GRANT: `authenticated` ve `anon` rollerine SELECT/INSERT/UPDATE verildi.
 
 `update_username(new_username citext)` — SECURITY DEFINER fonksiyon. 30 gün geçmemişse `raise exception` ile reddeder. Sadece `authenticated` role çağırabilir.
 
@@ -146,6 +149,6 @@ RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_ow
 | is_favourite | boolean | NOT NULL DEFAULT false |
 | created_at | timestamptz | NOT NULL DEFAULT now() |
 
-RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı (kullanıcı sadece kendi entry'lerini görür/yazar/günceller/siler).
+RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı. GRANT: `authenticated` rolüne SELECT/INSERT/UPDATE/DELETE verildi.
 
 **Dart model:** `LockerEntry` — `fromJson(Map)` snake_case → camelCase, `toJson()` insert/update payload için (id ve created_at hariç), `copyWith(...)` immutable güncelleme. `LockerCondition` enum'u `.name` ile serileşir.

@@ -13,7 +13,10 @@ class AuthNotifier extends Notifier<AuthState> {
           : const Unauthenticated();
     });
     ref.onDispose(subscription.cancel);
-    return const AuthLoading();
+    final current = _supabase.auth.currentSession;
+    return current != null
+        ? Authenticated(userId: current.user.id)
+        : const Unauthenticated();
   }
 
   Future<void> signIn({
@@ -39,16 +42,18 @@ class AuthNotifier extends Notifier<AuthState> {
     try {
       final response =
           await _supabase.auth.signUp(email: email, password: password);
-      if (response.user != null) {
+      if (response.user != null && response.session != null) {
         await _supabase.from('profiles').insert({
           'id': response.user!.id,
           'username': username,
         });
+      } else if (response.user != null && response.session == null) {
+        state = const AuthError(message: 'E-posta adresinizi doğrulayın.');
       }
     } on sb.AuthException catch (e) {
       state = AuthError(message: e.message);
-    } catch (_) {
-      state = const AuthError(message: 'Kayıt başarısız.');
+    } catch (e) {
+      state = AuthError(message: 'Kayıt başarısız: $e');
     }
   }
 

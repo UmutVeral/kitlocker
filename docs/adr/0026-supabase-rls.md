@@ -20,6 +20,27 @@ RLS is enabled on all tables. No table is left open. The Flutter app uses the `a
 | `blocks` | Owner only | Owner only |
 | `reports` | Owner only | Authenticated users |
 
+## Migration şablonu
+
+Her yeni tablo için migration şu iki bloğu birlikte içermeli:
+
+```sql
+-- 1. Tablo oluştur
+CREATE TABLE public.example (...);
+
+-- 2. GRANT — GRANT olmadan RLS policy'ler çalışmaz
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.example TO authenticated;
+GRANT SELECT ON public.example TO anon; -- public okuma varsa
+
+-- 3. RLS aktif et
+ALTER TABLE public.example ENABLE ROW LEVEL SECURITY;
+
+-- 4. Policy'leri tanımla
+CREATE POLICY "..." ON public.example ...;
+```
+
+**Kural:** RLS policy yazmak yetmez. `GRANT` olmadan Supabase anon/authenticated rolleri tabloya erişemez — `permission denied` hatası alınır.
+
 ## Service role
 
 Ghost Mannequin render completion (updating `visualization_url` on a `locker_entry`) is done via a Supabase Edge Function using the **service role key** — bypasses RLS for system operations. The service role key is never exposed to the client.
