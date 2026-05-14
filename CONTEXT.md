@@ -51,8 +51,9 @@ lib/
   main.dart                         ← entry point, ProviderScope
   core/
     auth/
-      auth_state.dart               ← sealed AuthState (AuthLoading | Authenticated | Unauthenticated)
-      auth_state_provider.dart      ← StateProvider<AuthState>
+      auth_state.dart               ← sealed AuthState (AuthLoading | Authenticated | Unauthenticated | AuthError)
+      auth_notifier.dart            ← AuthNotifier (Notifier<AuthState>) + authStateProvider
+      auth_state_provider.dart      ← re-export shim (authStateProvider, AuthNotifier)
     routing/
       app_router.dart               ← routerProvider (GoRouter)
       router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge)
@@ -65,10 +66,15 @@ lib/
     app_en.arb | app_tr.arb         ← string kaynakları
     app_localizations.dart          ← flutter gen-l10n çıktısı
 test/
-  core/routing/app_router_test.dart ← auth redirect davranışları (3 test)
+  core/routing/app_router_test.dart ← auth redirect davranışları (4 test, _FakeAuthNotifier ile)
   features/home/home_screen_test.dart ← TR/EN lokalizasyon (2 test)
+  widget_test.dart                  ← smoke test
 ```
 
-**Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`
+**Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
+
+**AuthNotifier pattern:** `Notifier<AuthState>` — `build()` içinde `supabase.auth.onAuthStateChange` stream'i dinler, başlangıç state'i `AuthLoading`. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
+
+**Test override pattern:** `_FakeAuthNotifier extends AuthNotifier` — `build()` override ederek Supabase'siz sabit state döner. `authStateProvider.overrideWith(() => _FakeAuthNotifier(initialState))`
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`

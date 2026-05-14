@@ -20,6 +20,7 @@ class RouterNotifier extends ChangeNotifier {
       Authenticated() =>
         (location == '/auth' || location == '/splash') ? '/home' : null,
       Unauthenticated() => location == '/auth' ? null : '/auth',
+      AuthError() => location == '/auth' ? null : '/auth',
     };
   }
 }
