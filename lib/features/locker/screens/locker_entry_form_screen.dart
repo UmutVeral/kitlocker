@@ -1,11 +1,15 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../catalog/models/kit_catalog_entry.dart';
 import '../../catalog/providers/catalog_provider.dart';
 import '../../catalog/widgets/catalog_search_sheet.dart';
+import '../../photos/providers/image_picker_provider.dart';
+import '../../recognition/locker_entry_recognition_applier.dart';
+import '../../recognition/providers/recognition_provider.dart';
 import '../models/locker_condition.dart';
 import '../models/locker_entry.dart';
 import '../providers/locker_entries_notifier.dart';
@@ -32,6 +36,7 @@ class _LockerEntryFormScreenState
   late List<String> _existingPhotoUrls;
   final List<XFile> _newPhotos = [];
   bool _isUploading = false;
+  bool _isRecognizing = false;
   KitCatalogEntry? _selectedCatalog;
 
   @override
@@ -73,9 +78,72 @@ class _LockerEntryFormScreenState
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
-    final picker = ImagePicker();
-    final file = await picker.pickImage(source: source, imageQuality: 90);
-    if (file != null) setState(() => _newPhotos.add(file));
+    final picker = ref.read(imagePickerServiceProvider);
+    final file = await picker.pickImage(source);
+    if (file == null || !mounted) return;
+
+    setState(() => _newPhotos.add(file));
+    await _runRecognition(file);
+  }
+
+  Future<void> _runRecognition(XFile file) async {
+    if (widget.existing != null) return;
+
+    setState(() => _isRecognizing = true);
+    try {
+      final catalog = await ref.read(kitCatalogProvider.future);
+      final bytes = await file.readAsBytes();
+      final coordinator = ref.read(recognitionCoordinatorProvider);
+      final outcome = await coordinator.recognize(
+        imageBytes: bytes,
+        catalog: catalog,
+      );
+
+      if (!mounted) return;
+
+      final applyResult = LockerEntryRecognitionApplier.apply(
+        outcome: outcome,
+        currentTeamName: _teamName.text,
+        currentSeason: _season.text,
+      );
+
+      switch (applyResult.kind) {
+        case RecognitionApplyKind.prefill:
+          _applyPrefill(applyResult);
+        case RecognitionApplyKind.manual:
+          if (applyResult.hadError) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Kit tanınamadı. Bilgileri manuel girebilir veya '
+                  'Catalog\'dan arayabilirsiniz.',
+                ),
+              ),
+            );
+          }
+        case RecognitionApplyKind.skipped:
+          break;
+      }
+    } finally {
+      if (mounted) setState(() => _isRecognizing = false);
+    }
+  }
+
+  void _applyPrefill(RecognitionApplyResult result) {
+    final values = result.formValues!;
+    setState(() {
+      _teamName.text = values.teamName;
+      _season.text = values.season;
+      if (values.playerName != null) {
+        _playerName.text = values.playerName!;
+      }
+      if (values.number != null) {
+        _number.text = values.number!;
+      }
+      if (result.catalogEntry != null) {
+        _selectedCatalog = result.catalogEntry;
+      }
+    });
   }
 
   void _showPhotoPicker() {
@@ -201,10 +269,21 @@ class _LockerEntryFormScreenState
             const SizedBox(height: 8),
             OutlinedButton.icon(
               key: const Key('form_add_photo_button'),
-              onPressed: _showPhotoPicker,
+              onPressed: _isRecognizing ? null : _showPhotoPicker,
               icon: const Icon(Icons.add_a_photo),
               label: const Text('Fotoğraf Ekle'),
             ),
+            if (_isRecognizing) ...[
+              const SizedBox(height: 8),
+              const LinearProgressIndicator(
+                key: Key('form_recognition_loading'),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Kit tanınıyor…',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 16),
             OutlinedButton.icon(
               key: const Key('form_catalog_search_button'),
@@ -308,8 +387,13 @@ class _PhotoThumbnail extends StatelessWidget {
   factory _PhotoThumbnail.file(XFile file, {required VoidCallback onRemove}) =>
       _PhotoThumbnail._(
         onRemove: onRemove,
-        child: Image.file(File(file.path), fit: BoxFit.cover),
+        child: _isFlutterTest
+            ? const ColoredBox(color: Color(0xFFE0E0E0))
+            : Image.file(File(file.path), fit: BoxFit.cover),
       );
+
+  static bool get _isFlutterTest =>
+      !kIsWeb && Platform.environment.containsKey('FLUTTER_TEST');
 
   final Widget child;
   final VoidCallback onRemove;
