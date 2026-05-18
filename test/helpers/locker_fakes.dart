@@ -1,11 +1,17 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:kitlocker/features/locker/models/locker_condition.dart';
 import 'package:kitlocker/features/locker/models/locker_entry.dart';
 import 'package:kitlocker/features/locker/providers/locker_entries_notifier.dart';
+import 'photo_fakes.dart';
 
 class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
   FakeLockerEntriesNotifier([List<LockerEntry> initial = const []])
-      : _initial = List.of(initial);
+      : _initial = List.of(initial),
+        super(
+          photoRepository: FakePhotoRepository(),
+          photoCompressor: FakePhotoCompressor(),
+        );
 
   final List<LockerEntry> _initial;
 
@@ -16,6 +22,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
     String? playerName,
     String? number,
     String? notes,
+    List<String> photos,
   })? lastAddCall;
   String? lastRemoveCall;
   LockerEntry? lastUpdateCall;
@@ -25,6 +32,51 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
   Future<List<LockerEntry>> build() async => List.of(_initial);
 
   @override
+  Future<void> addWithPhotos({
+    required List<XFile> newPhotos,
+    required List<String> existingUrls,
+    required String teamName,
+    required String season,
+    required LockerCondition condition,
+    String? playerName,
+    String? number,
+    String? notes,
+  }) async {
+    await add(
+      teamName: teamName,
+      season: season,
+      condition: condition,
+      playerName: playerName,
+      number: number,
+      notes: notes,
+      photos: existingUrls,
+    );
+  }
+
+  @override
+  Future<void> updateEntryWithPhotos({
+    required LockerEntry existing,
+    required List<XFile> newPhotos,
+    required List<String> existingUrls,
+    required String teamName,
+    required String season,
+    required LockerCondition condition,
+    String? playerName,
+    String? number,
+    String? notes,
+  }) async {
+    await updateEntry(existing.copyWith(
+      teamName: teamName,
+      season: season,
+      condition: condition,
+      playerName: playerName,
+      number: number,
+      notes: notes,
+      photos: existingUrls,
+    ));
+  }
+
+  @override
   Future<void> add({
     required String teamName,
     required String season,
@@ -32,6 +84,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
     String? playerName,
     String? number,
     String? notes,
+    List<String> photos = const [],
   }) async {
     lastAddCall = (
       teamName: teamName,
@@ -40,6 +93,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
       playerName: playerName,
       number: number,
       notes: notes,
+      photos: photos,
     );
     final entry = LockerEntry(
       id: 'fake-${state.valueOrNull?.length ?? 0}',
@@ -52,6 +106,7 @@ class FakeLockerEntriesNotifier extends LockerEntriesNotifier {
       playerName: playerName,
       number: number,
       notes: notes,
+      photos: photos,
     );
     final current = state.valueOrNull ?? [];
     state = AsyncData(sortLockerEntries([entry, ...current]));

@@ -94,4 +94,37 @@ void main() {
       expect(c.read(lockerEntriesProvider).requireValue.first.id, 'fav');
     });
   });
+
+  group('LockerEntriesNotifier — foto pipeline', () {
+    test('add() ile verilen CDN URL entry.photos\'da korunur', () async {
+      final c = await _container();
+      await c.read(lockerEntriesProvider.notifier).add(
+            teamName: 'Galatasaray',
+            season: '2024-25',
+            condition: LockerCondition.mint,
+            photos: ['https://cdn.example.com/kit-photos/user1/abc.webp'],
+          );
+
+      final entry = c.read(lockerEntriesProvider).requireValue.first;
+      expect(entry.photos, ['https://cdn.example.com/kit-photos/user1/abc.webp']);
+    });
+
+    test('add() ile birden fazla foto sırası korunur', () async {
+      final c = await _container();
+      const urls = [
+        'https://cdn.example.com/kit-photos/user1/front.webp',
+        'https://cdn.example.com/kit-photos/user1/back.webp',
+        'https://cdn.example.com/kit-photos/user1/detail.webp',
+      ];
+      await c.read(lockerEntriesProvider.notifier).add(
+            teamName: 'Galatasaray',
+            season: '2024-25',
+            condition: LockerCondition.mint,
+            photos: urls,
+          );
+
+      final entry = c.read(lockerEntriesProvider).requireValue.first;
+      expect(entry.photos, urls);
+    });
+  });
 }

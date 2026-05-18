@@ -73,6 +73,12 @@ lib/
         locker_screen.dart          ← grid view, kit count header, FAB → /locker/add
         locker_entry_form_screen.dart ← add/edit formu, validation (takım, sezon, condition, oyuncu, numara, notlar)
         locker_entry_detail_screen.dart ← detay, favori toggle, düzenleme, confirmation delete
+    photos/
+      photo_repository.dart         ← abstract interface PhotoRepository { uploadPhoto(Uint8List, userId) → Future<String> }
+      supabase_photo_repository.dart ← SupabasePhotoRepository — kit-photos bucket, userId/uuid.webp yolu, getPublicUrl döner
+      photo_compressor.dart         ← abstract interface PhotoCompressor { compress(Uint8List) → Future<Uint8List> }
+      flutter_image_compress_photo_compressor.dart ← FlutterImageCompressPhotoCompressor — WebP format, quality 85
+      photo_providers.dart          ← photoRepositoryProvider + photoCompressorProvider (Provider<T>)
     feed/ | showcase/ | social/ | notifications/
   l10n/
     app_en.arb | app_tr.arb         ← string kaynakları
@@ -81,14 +87,19 @@ test/
   helpers/
     auth_fakes.dart                       ← FakeAuthNotifier (paylaşılan test fake, tüm auth testleri kullanır)
     locker_fakes.dart                     ← FakeLockerEntriesNotifier + fakeEntry() yardımcısı
+    photo_fakes.dart                      ← FakePhotoRepository (returnUrl, shouldThrow, lastUploadedBytes/UserId) + FakePhotoCompressor (shouldThrow, lastInput)
   core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
   core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
   features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
   features/locker/
-    locker_entries_notifier_test.dart     ← 8 unit test (sortLockerEntries + state transitions)
-    locker_screen_test.dart               ← 6 widget test (grid, header count, form submit, validation)
+    locker_entries_notifier_test.dart     ← 10 unit test (sortLockerEntries:2, state transitions:6, foto pipeline:2)
+    locker_screen_test.dart               ← 7 widget test (grid:4, form submit+validation+upload error:3)
+  features/photos/
+    photo_repository_test.dart            ← 2 unit test (başarılı upload URL, exception fırlatma)
+    photo_compressor_test.dart            ← 2 unit test (non-empty bytes döner, exception fırlatma)
   widget_test.dart                        ← smoke test
+Toplam: 44 test GREEN
 supabase/
   migrations/
     20260514000001_create_profiles.sql          ← profiles tablosu, citext, unique index, RLS
@@ -105,13 +116,23 @@ supabase/
 
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` önce `_supabase.auth.currentSession`'ı senkron okur (null → `Unauthenticated`, non-null → `Authenticated`), ardından `onAuthStateChange` stream'i dinler. `AuthLoading` artık sadece geçiş anında kullanılır, başlangıç state'i değil. `register()` e-posta doğrulama gerektiren durumda (`session == null`) `AuthError('E-posta adresinizi doğrulayın.')` döner. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
-**LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?})`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
+**LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?, photos?: List<String>})`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
 
 **sortLockerEntries:** `lib/features/locker/providers/locker_entries_notifier.dart`'da top-level pure function. Sıralama: `isFavourite: true` önce, sonra `createdAt` desc. Hem notifier hem test fake aynı fonksiyonu kullanır.
 
 **Test override pattern (auth):** `authStateProvider.overrideWith(() => FakeAuthNotifier())` — `FakeAuthNotifier extends AuthNotifier`, `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulama.
 
 **Test override pattern (locker):** `lockerEntriesProvider.overrideWith(() => FakeLockerEntriesNotifier(initial))` — `FakeLockerEntriesNotifier extends LockerEntriesNotifier`, `build()` `async => List.of(_initial)` ile Supabase'siz çalışır. Unit testlerde `await container.read(lockerEntriesProvider.future)` ile ilk yükleme beklenir. Capture alanları: `lastAddCall` / `lastRemoveCall` / `lastUpdateCall` / `lastToggleFavouriteCall`. Mutasyonlar `state.valueOrNull ?? []` kullanır (widget testlerinde provider henüz başlatılmamış olabilir). `fakeEntry({id, teamName, season, condition, isFavourite, createdAt})` builder fonksiyonu ile test verisi oluşturulur.
+
+**PhotoRepository pattern:** `abstract interface class PhotoRepository` — tek metot: `uploadPhoto(Uint8List bytes, String userId) → Future<String>`. Implementasyon: `SupabasePhotoRepository` — `kit-photos` bucket'ına `$userId/${uuid}.webp` yolunda yükler, `getPublicUrl(path)` döner. Provider: `photoRepositoryProvider = Provider<PhotoRepository>(_ => SupabasePhotoRepository(Supabase.instance.client))`.
+
+**PhotoCompressor pattern:** `abstract interface class PhotoCompressor` — tek metot: `compress(Uint8List bytes) → Future<Uint8List>`. Implementasyon: `FlutterImageCompressPhotoCompressor(quality: 85)` — `flutter_image_compress` paketini kullanır, WebP format, quality 85. Provider: `photoCompressorProvider = Provider<PhotoCompressor>(_ => const FlutterImageCompressPhotoCompressor())`.
+
+**Test fakes (photos):** `FakePhotoRepository(returnUrl, shouldThrow)` — `lastUploadedBytes` / `lastUploadedUserId` capture alanları. `FakePhotoCompressor(shouldThrow)` — `lastInput` capture alanı, tek byte dönerek sıkıştırmayı simüle eder.
+
+**Form widget test pattern:** `LockerEntryFormScreen` widget testleri için gerekli override'lar: `authStateProvider` (→ `FakeAuthNotifier(Authenticated(userId: 'test-user'))`), `lockerEntriesProvider`, `photoRepositoryProvider`, `photoCompressorProvider`. ListView lazy-build nedeniyle submit butonu varsayılan 600px viewport'ta element tree'e girmiyor — `tester.view.physicalSize = const Size(800, 2000)` ile viewport büyütülmeli (tearDown'da `tester.view.resetPhysicalSize`). Hata yolu testi için `_ThrowingLockerEntriesNotifier extends LockerEntriesNotifier` (add() throws) lokal fake olarak test dosyasında tanımlanır.
+
+**l10n:** `l10n.yaml` — `output-dir` kullanılmıyor; `flutter gen-l10n` çıktısı doğrudan `lib/l10n/` içine yazılır. `synthetic-package: false` (deprecated warning, işlevsel değil). `lib/l10n/generated/` klasörü yoktur — bu dizin varsa stale artefact, silinebilir.
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
 
@@ -152,3 +173,13 @@ RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_ow
 RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı. GRANT: `authenticated` rolüne SELECT/INSERT/UPDATE/DELETE verildi.
 
 **Dart model:** `LockerEntry` — `fromJson(Map)` snake_case → camelCase, `toJson()` insert/update payload için (id ve created_at hariç), `copyWith(...)` immutable güncelleme. `LockerCondition` enum'u `.name` ile serileşir.
+
+### Supabase Storage Buckets
+
+| Bucket | Erişim | Yol Yapısı | Kullanım |
+|--------|--------|------------|----------|
+| `kit-photos` | Public read, owner write (RLS) | `{userId}/{uuid}.webp` | Kullanıcı kit fotoğrafları (WebP, quality 85) |
+| `kit-renders` | Public read, owner write | `{userId}/{uuid}.webp` | Ghost Mannequin render çıktıları |
+| `avatars` | Public read, owner write | `{userId}/avatar.webp` | Profil fotoğrafları |
+
+`kit-photos` bucket V1'de implement edildi. `kit-renders` ve `avatars` Ghost Mannequin (#9) ve profil (#10) issue'larında eklenecek.
