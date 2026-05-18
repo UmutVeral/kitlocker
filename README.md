@@ -1,16 +1,27 @@
-# kitlocker
+# KitLocker
 
-A new Flutter project.
+Digital jersey collection app with Ghost Mannequin visualization (Flutter + Supabase).
 
-## Getting Started
+## Docs
 
-This project is a starting point for a Flutter application.
+- [CONTEXT.md](CONTEXT.md) — domain glossary, architecture, implemented modules
+- [docs/prd-v1.md](docs/prd-v1.md) — V1 product requirements
+- [docs/adr/](docs/adr/) — architecture decision records
+- [GitHub Issues](https://github.com/UmutVeral/kitlocker/issues) — implementation tracker
 
-A few resources to get you started if this is your first Flutter project:
+## Status (V1)
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+| Done | Open |
+|------|------|
+| App shell, auth, locker CRUD, photo pipeline (#3–#6) | Ghost Mannequin, AI recognition, showcase, social, feed (#7–#25) |
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Dev
+
+```bash
+flutter pub get
+flutter gen-l10n
+flutter test
+flutter run
+```
+
+Supabase env: `SUPABASE_URL` and `SUPABASE_ANON_KEY` (see `main.dart`).
