@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:kitlocker/features/catalog/models/kit_catalog_entry.dart';
+import 'package:kitlocker/features/catalog/models/kit_type.dart';
+import 'package:kitlocker/features/catalog/providers/catalog_provider.dart';
 import 'package:kitlocker/features/locker/models/locker_condition.dart';
 import 'package:kitlocker/features/locker/models/locker_entry.dart';
 import 'package:kitlocker/features/locker/providers/locker_entries_notifier.dart';
@@ -27,6 +30,8 @@ class _ThrowingLockerEntriesNotifier extends LockerEntriesNotifier {
     required String teamName,
     required String season,
     required LockerCondition condition,
+    String? kitCatalogId,
+    String? leagueId,
     String? playerName,
     String? number,
     String? notes,
@@ -43,10 +48,27 @@ Widget _buildLockerApp(FakeLockerEntriesNotifier notifier) => ProviderScope(
       child: const MaterialApp(home: LockerScreen()),
     );
 
-Widget _buildFormApp(FakeLockerEntriesNotifier notifier) => ProviderScope(
-      overrides: _formOverrides(notifier),
+Widget _buildFormApp(
+  FakeLockerEntriesNotifier notifier, {
+  List<Override> extraOverrides = const [],
+}) =>
+    ProviderScope(
+      overrides: [
+        ..._formOverrides(notifier),
+        ...extraOverrides,
+      ],
       child: const MaterialApp(home: LockerEntryFormScreen()),
     );
+
+final _testCatalog = [
+  KitCatalogEntry(
+    id: 'cat-1',
+    teamName: 'Galatasaray',
+    leagueId: 'super-lig',
+    season: '2024-25',
+    kitType: KitType.home,
+  ),
+];
 
 void main() {
   group('LockerScreen', () {
@@ -130,6 +152,39 @@ void main() {
 
       expect(find.text('Takım adı zorunlu'), findsOneWidget);
       expect(notifier.lastAddCall, isNull);
+    });
+
+    testWidgets('catalog seçimi metadata doldurur ve kitCatalogId gönderir',
+        (tester) async {
+      await _setTallViewport(tester);
+      final notifier = FakeLockerEntriesNotifier();
+      await tester.pumpWidget(_buildFormApp(
+        notifier,
+        extraOverrides: [
+          kitCatalogProvider.overrideWith((ref) async => _testCatalog),
+        ],
+      ));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('form_catalog_search_button')));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+          find.byKey(const Key('catalog_search_team')), 'Gala');
+      await tester.pump();
+
+      await tester.tap(find.byKey(const Key('catalog_result_cat-1')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Galatasaray', skipOffstage: false), findsWidgets);
+
+      await tester.tap(find.byKey(const Key('form_submit_button')));
+      await tester.pumpAndSettle();
+
+      expect(notifier.lastAddCall?.teamName, 'Galatasaray');
+      expect(notifier.lastAddCall?.season, '2024-25');
+      expect(notifier.lastAddCall?.kitCatalogId, 'cat-1');
+      expect(notifier.lastAddCall?.leagueId, 'super-lig');
     });
 
     testWidgets('upload hatası SnackBar gösterir', (tester) async {

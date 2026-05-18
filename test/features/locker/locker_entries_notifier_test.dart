@@ -42,6 +42,21 @@ void main() {
       expect(c.read(lockerEntriesProvider).requireValue, isEmpty);
     });
 
+    test('add() catalog bağlantısı kitCatalogId ve leagueId kaydeder', () async {
+      final c = await _container();
+      await c.read(lockerEntriesProvider.notifier).add(
+            teamName: 'Galatasaray',
+            season: '2024-25',
+            condition: LockerCondition.mint,
+            kitCatalogId: 'cat-gs-2024-home',
+            leagueId: 'super-lig',
+          );
+
+      final entry = c.read(lockerEntriesProvider).requireValue.first;
+      expect(entry.kitCatalogId, 'cat-gs-2024-home');
+      expect(entry.leagueId, 'super-lig');
+    });
+
     test('add() sonrası yeni entry state\'e eklenir', () async {
       final c = await _container();
       await c.read(lockerEntriesProvider.notifier).add(

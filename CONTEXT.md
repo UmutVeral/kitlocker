@@ -71,8 +71,17 @@ lib/
         locker_entries_notifier.dart ← LockerEntriesNotifier + sortLockerEntries() + lockerEntriesProvider
       screens/
         locker_screen.dart          ← grid view, kit count header, FAB → /locker/add
-        locker_entry_form_screen.dart ← add/edit formu, validation (takım, sezon, condition, oyuncu, numara, notlar)
+        locker_entry_form_screen.dart ← add/edit formu, validation + "Catalog'dan ara" (kitCatalogId/leagueId)
         locker_entry_detail_screen.dart ← detay, favori toggle, düzenleme, confirmation delete
+    catalog/
+      models/
+        kit_type.dart                 ← enum KitType { home, away, third }
+        kit_catalog_entry.dart        ← KitCatalogEntry (fromJson/toJson)
+      kit_catalog_searcher.dart       ← KitCatalogSearcher — client-side fuzzy search (trigram + prefix)
+      catalog_repository.dart         ← abstract CatalogRepository + searchCatalog()
+      supabase_catalog_repository.dart ← SupabaseCatalogRepository (kit_catalog SELECT)
+      providers/catalog_provider.dart ← catalogRepositoryProvider, kitCatalogProvider
+      widgets/catalog_search_sheet.dart ← CatalogSearchSheet + showCatalogSearchSheet()
     photos/
       photo_repository.dart         ← abstract interface PhotoRepository { uploadPhoto(Uint8List, userId) → Future<String> }
       supabase_photo_repository.dart ← SupabasePhotoRepository — kit-photos bucket, userId/uuid.webp yolu, getPublicUrl döner
@@ -92,14 +101,18 @@ test/
   core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
   features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
+  features/catalog/
+    kit_catalog_searcher_test.dart        ← 6 unit test (fuzzy, filtreler, ambiguous, unknown)
   features/locker/
-    locker_entries_notifier_test.dart     ← 10 unit test (sortLockerEntries:2, state transitions:6, foto pipeline:2)
-    locker_screen_test.dart               ← 7 widget test (grid:4, form submit+validation+upload error:3)
+    locker_entries_notifier_test.dart     ← 11 unit test (sortLockerEntries:2, state transitions:7, foto pipeline:2)
+    locker_screen_test.dart               ← 8 widget test (grid:4, form:4 incl. catalog seçimi)
   features/photos/
     photo_repository_test.dart            ← 2 unit test (başarılı upload URL, exception fırlatma)
     photo_compressor_test.dart            ← 2 unit test (non-empty bytes döner, exception fırlatma)
   widget_test.dart                        ← smoke test
-Toplam: 44 test GREEN
+Toplam: 52 test GREEN
+tool/
+  seed_kit_catalog.dart                   ← FKAPI → kit_catalog idempotent upsert (FKAPI_BASE_URL veya dev fixture)
 supabase/
   migrations/
     20260514000001_create_profiles.sql          ← profiles tablosu, citext, unique index, RLS
@@ -108,6 +121,7 @@ supabase/
     20260514233219_profiles_rls_insert_policy.sql    ← profiles INSERT policy (authenticated role)
     20260514234158_grant_profiles_to_authenticated.sql   ← GRANT SELECT/INSERT/UPDATE on profiles
     20260514234544_grant_locker_entries_to_authenticated.sql ← GRANT SELECT/INSERT/UPDATE/DELETE on locker_entries
+    20260519000001_create_kit_catalog.sql     ← kit_catalog tablosu, RLS read-only, locker_entries FK
 ```
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
@@ -116,7 +130,11 @@ supabase/
 
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` önce `_supabase.auth.currentSession`'ı senkron okur (null → `Unauthenticated`, non-null → `Authenticated`), ardından `onAuthStateChange` stream'i dinler. `AuthLoading` artık sadece geçiş anında kullanılır, başlangıç state'i değil. `register()` e-posta doğrulama gerektiren durumda (`session == null`) `AuthError('E-posta adresinizi doğrulayın.')` döner. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
-**LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, playerName?, number?, notes?, photos?: List<String>})`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
+**LockerEntriesNotifier pattern:** `AsyncNotifier<List<LockerEntry>>` — `build()` Supabase'den yükler (RLS userId filtresi), `AsyncLoading → AsyncData | AsyncError`. Public interface: `add({teamName, season, condition, kitCatalogId?, leagueId?, playerName?, number?, notes?, photos?: List<String>})`, `addWithPhotos(...)`, `remove(id)`, `updateEntry(LockerEntry)`, `toggleFavourite(id)`. Mutasyonlar `state.requireValue` ile mevcut listeye erişir, `AsyncData(sortLockerEntries(...))` ile günceller. `lockerEntriesProvider = AsyncNotifierProvider<LockerEntriesNotifier, List<LockerEntry>>`.
+
+**KitCatalogSearcher pattern:** `KitCatalogSearcher.search(catalog, {teamQuery, season?, kitType?})` — pure Dart, client-side. Kısaltma (prefix/contains), trigram benzeri typo toleransı, Türkçe karakter normalizasyonu. `searchCatalog()` ve `searchKitCatalog()` repository katmanından export edilir.
+
+**CatalogRepository pattern:** `abstract class CatalogRepository { fetchCatalog() }` — `SupabaseCatalogRepository` `kit_catalog` tablosunu okur. `kitCatalogProvider` FutureProvider ile cache'ler. Form: `showCatalogSearchSheet()` → seçim `teamName`/`season` doldurur, submit `kitCatalogId` + `leagueId` gönderir.
 
 **sortLockerEntries:** `lib/features/locker/providers/locker_entries_notifier.dart`'da top-level pure function. Sıralama: `isFavourite: true` önce, sonra `createdAt` desc. Hem notifier hem test fake aynı fonksiyonu kullanır.
 
@@ -157,9 +175,9 @@ RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_ow
 |-------|-----|-------|
 | id | uuid | PK, DEFAULT gen_random_uuid() |
 | user_id | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE |
-| kit_catalog_id | uuid | nullable — gelecekte FKAPI entegrasyonu |
+| kit_catalog_id | uuid | nullable, FK → kit_catalog(id) ON DELETE SET NULL |
 | team_name | text | NOT NULL |
-| league_id | uuid | nullable |
+| league_id | text | nullable — FKAPI competition id |
 | season | text | NOT NULL |
 | player_name | text | nullable |
 | number | text | nullable |
@@ -173,6 +191,22 @@ RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_ow
 RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı. GRANT: `authenticated` rolüne SELECT/INSERT/UPDATE/DELETE verildi.
 
 **Dart model:** `LockerEntry` — `fromJson(Map)` snake_case → camelCase, `toJson()` insert/update payload için (id ve created_at hariç), `copyWith(...)` immutable güncelleme. `LockerCondition` enum'u `.name` ile serileşir.
+
+### kit_catalog
+| Kolon | Tip | Kısıt |
+|-------|-----|-------|
+| id | uuid | PK, DEFAULT gen_random_uuid() |
+| fkapi_kit_id | text | UNIQUE — idempotent seed anahtarı |
+| team_name | text | NOT NULL |
+| league_id | text | NOT NULL — FKAPI competition id |
+| season | text | NOT NULL |
+| kit_type | text | NOT NULL, CHECK IN ('home','away','third') |
+| image_url | text | nullable |
+| created_at | timestamptz | NOT NULL DEFAULT now() |
+
+RLS aktif. Policy: `kit_catalog_select_authenticated` — authenticated kullanıcılar SELECT. GRANT SELECT `authenticated`. Kaynak: FKAPI (ADR-0009), `tool/seed_kit_catalog.dart` ile seed.
+
+**Dart model:** `KitCatalogEntry` + `KitType` enum. Read-only; kullanıcı katkısı yok.
 
 ### Supabase Storage Buckets
 
