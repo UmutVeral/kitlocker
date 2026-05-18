@@ -3,6 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
+import '../../catalog/models/kit_catalog_entry.dart';
+import '../../catalog/providers/catalog_provider.dart';
+import '../../catalog/widgets/catalog_search_sheet.dart';
 import '../models/locker_condition.dart';
 import '../models/locker_entry.dart';
 import '../providers/locker_entries_notifier.dart';
@@ -29,6 +32,7 @@ class _LockerEntryFormScreenState
   late List<String> _existingPhotoUrls;
   final List<XFile> _newPhotos = [];
   bool _isUploading = false;
+  KitCatalogEntry? _selectedCatalog;
 
   @override
   void initState() {
@@ -51,6 +55,21 @@ class _LockerEntryFormScreenState
     _number.dispose();
     _notes.dispose();
     super.dispose();
+  }
+
+  Future<void> _openCatalogSearch() async {
+    final catalog = await ref.read(kitCatalogProvider.future);
+    if (!mounted) return;
+    final selected = await showCatalogSearchSheet(
+      context: context,
+      catalog: catalog,
+    );
+    if (selected == null || !mounted) return;
+    setState(() {
+      _selectedCatalog = selected;
+      _teamName.text = selected.teamName;
+      _season.text = selected.season;
+    });
   }
 
   Future<void> _pickPhoto(ImageSource source) async {
@@ -110,6 +129,8 @@ class _LockerEntryFormScreenState
           teamName: teamName,
           season: season,
           condition: _condition,
+          kitCatalogId: _selectedCatalog?.id,
+          leagueId: _selectedCatalog?.leagueId,
           playerName: playerName,
           number: number,
           notes: notes,
@@ -184,6 +205,22 @@ class _LockerEntryFormScreenState
               icon: const Icon(Icons.add_a_photo),
               label: const Text('Fotoğraf Ekle'),
             ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              key: const Key('form_catalog_search_button'),
+              onPressed: _openCatalogSearch,
+              icon: const Icon(Icons.search),
+              label: const Text('Catalog\'dan ara'),
+            ),
+            if (_selectedCatalog != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Catalog: ${_selectedCatalog!.teamName} · '
+                '${_selectedCatalog!.season} · '
+                '${_selectedCatalog!.kitType.label}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
             const SizedBox(height: 16),
             // — Form alanları —
             TextFormField(
