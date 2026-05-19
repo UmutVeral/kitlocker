@@ -61,7 +61,7 @@ lib/
       router_notifier.dart          ← RouterNotifier (ChangeNotifier, refresh bridge), AppRoutes kullanır
   features/
     auth/screens/auth_screen.dart   ← TabBar (Kayıt Ol / Giriş Yap), Form + validation, Riverpod
-    home/screens/home_screen.dart   ← homeGreeting metni + "Locker'ıma Git" butonu (context.go(AppRoutes.locker))
+    home/screens/home_screen.dart   ← ConsumerStatefulWidget, BottomNavigationBar shell — Tab 0: LockerScreen, Tab 1: ProfileScreen(currentUserId)
     splash/screens/splash_screen.dart
     locker/
       models/
@@ -103,7 +103,23 @@ lib/
       photo_providers.dart          ← photoRepositoryProvider + photoCompressorProvider (Provider<T>)
       image_picker_service.dart     ← abstract pickImage(ImageSource); ImagePickerServiceImpl
       providers/image_picker_provider.dart ← imagePickerServiceProvider (test override)
-    feed/ | showcase/ | social/ | notifications/
+    social/
+      models/
+        user_profile.dart             ← UserProfile(userId, username) — immutable, fromJson, == by userId
+      repositories/
+        follow_repository.dart        ← abstract interface FollowRepository { follow, unfollow, isFollowing, getFollowers, getFollowing, notifyNewFollower }
+        supabase_follow_repository.dart ← SupabaseFollowRepository — iki aşamalı sorgu (follows → inFilter profiles)
+      providers/
+        follow_repository_provider.dart ← followRepositoryProvider = Provider<FollowRepository>
+        follow_toggle_notifier.dart   ← FollowToggleNotifier (FamilyAsyncNotifier<bool,String>) + followToggleProvider
+        followers_notifier.dart       ← FollowersNotifier (FamilyAsyncNotifier<List<UserProfile>,String>) + followersOfProvider
+        following_notifier.dart       ← FollowingNotifier (FamilyAsyncNotifier<List<UserProfile>,String>) + followingOfProvider
+        user_profile_provider.dart    ← userProfileProvider (FutureProvider.family<UserProfile?,String>) — profiles tablosu
+      screens/
+        profile_screen.dart           ← ProfileScreen(userId) — follow/unfollow butonu (kendi profilinde gizli), takipçi/takip sayıları tıklanabilir
+        followers_screen.dart         ← FollowersScreen(userId) — takipçi listesi
+        following_screen.dart         ← FollowingScreen(userId) — takip edilen listesi
+    feed/ | showcase/ | notifications/
   l10n/
     app_en.arb | app_tr.arb         ← string kaynakları
     app_localizations.dart          ← flutter gen-l10n çıktısı
@@ -113,10 +129,12 @@ test/
     locker_fakes.dart                     ← FakeLockerEntriesNotifier + fakeEntry() yardımcısı
     photo_fakes.dart                      ← FakePhotoRepository + FakePhotoCompressor
     recognition_fakes.dart                ← FakeKitRecognitionRepository + FakeImagePickerService
+    onboarding_fakes.dart                 ← FakeOnboardingNotifier, completeOnboardingCalled flag
+    social_fakes.dart                     ← FakeFollowRepository (Set<(String,String)>, seedProfile), fakeProfile()
   core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
-  core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
+  core/routing/app_router_test.dart       ← auth redirect davranışları (34 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
-  features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
+  features/home/home_screen_test.dart     ← BottomNavigationBar sekme testleri (4 test)
   features/catalog/
     kit_catalog_searcher_test.dart        ← 6 unit test (fuzzy, filtreler, ambiguous, unknown)
   features/recognition/
@@ -126,12 +144,20 @@ test/
     locker_entry_recognition_applier_test.dart ← 2 unit test (prefill, user already filled)
   features/locker/
     locker_entries_notifier_test.dart     ← 11 unit test (sortLockerEntries:2, state transitions:7, foto pipeline:2)
-    locker_screen_test.dart               ← 8 widget test (grid:4, form:4 incl. catalog seçimi)
+    locker_filter_sort_test.dart          ← LockerFilter + applyFilterAndSort unit testleri
+    locker_screen_test.dart               ← widget test (grid, filtre, sort, form incl. catalog seçimi)
   features/photos/
     photo_repository_test.dart            ← 2 unit test (başarılı upload URL, exception fırlatma)
     photo_compressor_test.dart            ← 2 unit test (non-empty bytes döner, exception fırlatma)
+  features/onboarding/
+    onboarding_notifier_test.dart         ← completeOnboarding state geçişi
+    onboarding_camera_screen_test.dart    ← skip + add kit butonu widget testleri
+  features/social/
+    follow_repository_test.dart           ← 12 unit test (follow, unfollow, isFollowing, getFollowers, getFollowing, notify)
+    follow_toggle_notifier_test.dart      ← 9 unit test (başlangıç durumu, toggle follow/unfollow, notify çağrısı)
+    profile_screen_test.dart              ← 8 widget test (kullanıcı adı, follow butonu, toggle, kendi profili)
   widget_test.dart                        ← smoke test
-Toplam: 61 test GREEN
+Toplam: 116 test GREEN
 tool/
   seed_kit_catalog.dart                   ← FKAPI → kit_catalog idempotent upsert (FKAPI_BASE_URL veya dev fixture)
 supabase/
@@ -149,7 +175,7 @@ supabase/
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
 
-**AppRoutes:** `abstract final class` — `splash`, `auth`, `home` path sabitleri + `locker = '/locker'`, `lockerAdd = '/locker/add'`, `lockerDetail(String id) → '/locker/$id'`. GoRouter'da `/locker` altında `add` ve `:id` alt rotalar nested tanımlı.
+**AppRoutes:** `abstract final class` — `splash`, `auth`, `home`, `onboardingCamera` path sabitleri + `locker = '/locker'`, `lockerAdd = '/locker/add'`, `lockerDetail(String id) → '/locker/$id'`. Social: `profile(String userId) → '/profile/$userId'`, `profileFollowers(userId)`, `profileFollowing(userId)`. GoRouter'da `/locker` ve `/profile/:userId` altında nested alt rotalar tanımlı.
 
 **AuthNotifier pattern:** `Notifier<AuthState>` — `build()` önce `_supabase.auth.currentSession`'ı senkron okur (null → `Unauthenticated`, non-null → `Authenticated`), ardından `onAuthStateChange` stream'i dinler. `AuthLoading` artık sadece geçiş anında kullanılır, başlangıç state'i değil. `register()` e-posta doğrulama gerektiren durumda (`session == null`) `AuthError('E-posta adresinizi doğrulayın.')` döner. Public interface: `signIn(email, password)`, `register(email, password, username)`, `signOut()`. Supabase client: `Supabase.instance.client` singleton.
 
@@ -177,6 +203,20 @@ supabase/
 
 **Form widget test pattern:** `LockerEntryFormScreen` widget testleri için gerekli override'lar: `authStateProvider` (→ `FakeAuthNotifier(Authenticated(userId: 'test-user'))`), `lockerEntriesProvider`, `photoRepositoryProvider`, `photoCompressorProvider`. ListView lazy-build nedeniyle submit butonu varsayılan 600px viewport'ta element tree'e girmiyor — `tester.view.physicalSize = const Size(800, 2000)` ile viewport büyütülmeli (tearDown'da `tester.view.resetPhysicalSize`). Hata yolu testi için `_ThrowingLockerEntriesNotifier extends LockerEntriesNotifier` (add() throws) lokal fake olarak test dosyasında tanımlanır.
 
+**FollowRepository pattern:** `abstract interface class FollowRepository` — `follow(followerId, followeeId)`, `unfollow(followerId, followeeId)`, `isFollowing(followerId, followeeId) → Future<bool>`, `getFollowers(userId) → Future<List<UserProfile>>`, `getFollowing(userId) → Future<List<UserProfile>>`, `notifyNewFollower(followerId, followeeId)` (Edge Function stub, hata yutarak çalışır). `SupabaseFollowRepository` iki aşamalı sorgu kullanır: önce follower_id listesi çeker, sonra `inFilter('id', ids)` ile profiles'dan UserProfile'ları alır — PostgREST doğrudan join yok. Provider: `followRepositoryProvider = Provider<FollowRepository>`.
+
+**FollowToggleNotifier pattern:** `FamilyAsyncNotifier<bool, String>` (arg = targetUserId) — `build(targetUserId)`: `authStateProvider` watch eder, `isFollowing(currentUser, targetUserId)` döner. `toggle()`: follow ise `unfollow()` + `state = AsyncData(false)`, değilse `follow()` + `notifyNewFollower()` + `state = AsyncData(true)`. Her iki durumda `ref.invalidate(followersOfProvider(arg))` ve `ref.invalidate(followingOfProvider(currentUserId))`. Provider: `followToggleProvider = AsyncNotifierProvider.family`.
+
+**FollowersNotifier / FollowingNotifier pattern:** `FamilyAsyncNotifier<List<UserProfile>, String>` — `build(userId)` sadece `followRepositoryProvider.getFollowers/getFollowing(userId)` döner. Provider: `followersOfProvider`, `followingOfProvider`.
+
+**userProfileProvider:** `FutureProvider.family<UserProfile?, String>` — `profiles` tablosundan `id, username` çeker, `maybeSingle()` ile yoksa null döner.
+
+**ProfileScreen pattern:** `ProfileScreen(userId)` — `authStateProvider`'dan currentUserId alır, `isOwnProfile = currentUserId == userId` kontrolü. AppBar actions'da `_FollowButton(targetUserId)` — sadece başkasının profilinde. Body: `_CountTile` (tıklanabilir, `context.push(AppRoutes.profileFollowers/Following(userId))`). Followers/Following sayıları `followersOfProvider`/`followingOfProvider` ile.
+
+**HomeScreen TabBar pattern:** `ConsumerStatefulWidget`, `_currentIndex` state, `IndexedStack([LockerScreen(), ProfileScreen(userId)])`, `BottomNavigationBar` ile tab geçişi.
+
+**Test override pattern (social):** `followRepositoryProvider.overrideWithValue(FakeFollowRepository())` — tüm social testlerde. `userProfileProvider.overrideWith((ref, uid) async => fakeProfile(...))` — FutureProvider.family override syntax. `FakeFollowRepository` — `Set<(String, String)>` ile takip grafiği, `seedProfile()` ile profil ekleme, `lastNotifyCall` capture.
+
 **l10n:** `l10n.yaml` — `output-dir` kullanılmıyor; `flutter gen-l10n` çıktısı doğrudan `lib/l10n/` içine yazılır. `synthetic-package: false` (deprecated warning, işlevsel değil). `lib/l10n/generated/` klasörü yoktur — bu dizin varsa stale artefact, silinebilir.
 
 **Lokalizasyon:** `flutter gen-l10n` → `lib/l10n/app_localizations.dart` (synthetic-package: false). Import: `package:kitlocker/l10n/app_localizations.dart`
@@ -194,6 +234,8 @@ supabase/
 | created_at | timestamptz | DEFAULT now() |
 
 RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_own` / `profiles_update_own` / `users can insert own profile` (sadece kendi kaydı). GRANT: `authenticated` ve `anon` rollerine SELECT/INSERT/UPDATE verildi.
+
+**#18 eklenenler:** `onboarding_completed_at timestamptz nullable` (OnboardingNotifier), `fcm_token text nullable` (notify-new-follower Edge Function, #14'te aktif).
 
 `update_username(new_username citext)` — SECURITY DEFINER fonksiyon. 30 gün geçmemişse `raise exception` ile reddeder. Sadece `authenticated` role çağırabilir.
 
@@ -218,6 +260,17 @@ RLS aktif. Policies: `profiles_select_public` (herkes okur), `profiles_insert_ow
 RLS aktif. Policies: `locker_entries_select_own`, `locker_entries_insert_own`, `locker_entries_update_own`, `locker_entries_delete_own` — hepsi `auth.uid() = user_id` ile kısıtlı. GRANT: `authenticated` rolüne SELECT/INSERT/UPDATE/DELETE verildi.
 
 **Dart model:** `LockerEntry` — `fromJson(Map)` snake_case → camelCase, `toJson()` insert/update payload için (id ve created_at hariç), `copyWith(...)` immutable güncelleme. `LockerCondition` enum'u `.name` ile serileşir.
+
+### follows
+| Kolon | Tip | Kısıt |
+|-------|-----|-------|
+| id | uuid | PK, DEFAULT gen_random_uuid() |
+| follower_id | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE |
+| followee_id | uuid | NOT NULL, FK → auth.users(id) ON DELETE CASCADE |
+| created_at | timestamptz | NOT NULL DEFAULT now() |
+| — | — | UNIQUE (follower_id, followee_id), CHECK follower_id <> followee_id |
+
+RLS aktif. Policies: `follows_select` (authenticated SELECT all), `follows_insert` (follower_id = auth.uid()), `follows_delete` (follower_id = auth.uid()). GRANT SELECT/INSERT/DELETE `authenticated`.
 
 ### kit_catalog
 | Kolon | Tip | Kısıt |
@@ -250,5 +303,6 @@ RLS aktif. Policy: `kit_catalog_select_authenticated` — authenticated kullanı
 | Function | Secret(s) | Purpose |
 |----------|-----------|---------|
 | `recognize-kit` | `GEMINI_API_KEY`, optional `GEMINI_MODEL` | Jersey photo → structured metadata via Gemini Flash (#8) |
+| `notify-new-follower` | `FCM_SERVER_KEY` (gerekli, #14'te set edilecek) | Follow event → FCM push to followee. Token yoksa `{sent: false}` döner, hata fırlatmaz (#18) |
 
-Deploy: `supabase functions deploy recognize-kit`. Client invokes via `Supabase.instance.client.functions.invoke('recognize-kit', body: { imageBase64 })`.
+Deploy: `supabase functions deploy <function-name>`. Client invokes via `Supabase.instance.client.functions.invoke(name, body: {...})`.
