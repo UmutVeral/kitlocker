@@ -101,6 +101,8 @@ KitLocker is a Flutter mobile app (iOS + Android) where users photograph their j
 - After metadata confirmation, the Locker Entry is persisted immediately with the flat photo. Ghost Mannequin render starts asynchronously.
 - Photos are compressed to WebP client-side before upload. Stored in Supabase Storage, served via Cloudflare CDN.
 
+**Implemented (V1 slices):** Photo pipeline + WebP upload (#6). Kit catalog seed + manual search (#7). AI recognition via `recognize-kit` Edge Function + form pre-fill at confidence ≥ 0.7 (#8). Ghost Mannequin async pipeline not yet built (#9+).
+
 ### Ghost Mannequin Pipeline (Visualization Module)
 - Encapsulated behind a single provider-agnostic interface: `GhostMannequinRenderer.render(photo) → Future<String renderUrl>`. The concrete provider is selected during initial testing and can be swapped without touching other modules.
 - Render is triggered asynchronously after kit save. The flat photo is displayed immediately as a placeholder.
@@ -155,6 +157,8 @@ KitLocker is a Flutter mobile app (iOS + Android) where users photograph their j
 - Test confidence threshold branching: high confidence auto-fills fields, low confidence leaves them blank for user input.
 - Test metadata merge when the user edits AI-suggested values.
 - Test FKAPI fuzzy search: common misspellings, abbreviations, ambiguous player names, unknown team, future season.
+
+**Covered in repo:** `test/features/recognition/` (prefill, coordinator, catalog matcher, applier); `test/features/catalog/kit_catalog_searcher_test.dart`.
 
 ### Ghost Mannequin Pipeline
 - Test the `GhostMannequinRenderer` interface contract: a successful mock response updates the Locker Entry's `visualizationUrl`.

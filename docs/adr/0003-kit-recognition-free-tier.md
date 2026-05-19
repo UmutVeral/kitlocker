@@ -23,3 +23,11 @@ Use a **free-tier vision model** (e.g., Gemini Flash) for kit recognition. No in
 - Recognition accuracy ceiling is lower than a fine-tuned model. Acceptable.
 - The confidence threshold UX (auto-fill vs. prompt-to-confirm) remains important — bad auto-fills are more annoying than no auto-fill.
 - If free-tier rate limits become a problem at scale, this decision should be revisited.
+
+## Implementation (issue #8)
+
+- **Edge Function:** `supabase/functions/recognize-kit` — accepts base64 WebP (`imageBase64`), forwards as `image/webp` to Gemini Flash, returns `{ team, league, season, playerName, number, confidence }`. Secret: `GEMINI_API_KEY` (optional `GEMINI_MODEL`).
+- **Pre-upload compress:** `LockerEntryFormScreen` runs `PhotoCompressor` on the picked image before calling the Edge Function (same WebP pipeline as storage upload).
+- **Flutter:** `lib/features/recognition/` — `RecognitionCoordinator` orchestrates repo + catalog validation; `KitRecognitionPrefill` applies threshold `0.7` (`KitRecognitionConfig.confidenceThreshold`).
+- **Form:** `LockerEntryFormScreen` triggers recognition after photo pick (add flow only). High confidence → pre-fill; low confidence or failure → manual entry + Catalog search; user-edited fields are not overwritten.
+- **Catalog validation:** `KitRecognitionCatalogMatcher` reuses `KitCatalogSearcher` (#7) to set `kitCatalogId` / `leagueId` when AI output matches the catalog snapshot.

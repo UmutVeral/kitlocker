@@ -11,6 +11,8 @@
 4. Kamera açılır direkt (galeri seçeneği de mevcut)
 5. Fotoğraf çekilir → AI recognition başlar (loading indicator)
 6. Metadata ekranı — AI sonuçları gösterilir, kullanıcı onaylar veya düzeltir
+
+> **Partial today (#8):** Recognition + loading + pre-fill exist on `LockerEntryFormScreen` after photo pick. The dedicated onboarding route (camera-first, steps 4–8) is not built yet — tracked separately (e.g. #12).
 7. "Forma ekleniyor..." kısa animasyon
 8. Locker açılır — forma düz fotoğrafla listelenir
 9. Banner: "WOW görünümün hazırlanıyor..." (asenkron render kuyruğa alındı)

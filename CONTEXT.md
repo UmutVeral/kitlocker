@@ -22,7 +22,7 @@ The AI-powered visual transformation of a flat jersey photo into a Ghost Mannequ
 The visual effect where a flat jersey photo is transformed so the garment appears to be worn by an invisible human body — no head, no arms, no legs visible, but the fabric takes the natural 3D shape, volume, and drape of a garment on a body. Industry term used in e-commerce product photography. This is what KitLocker's WOW Visualization produces.
 
 ### Kit Recognition
-A supporting feature, not a differentiator. Saves the user from typing metadata manually. If the AI is confident, it pre-fills fields. If not, the user fills them in. Accuracy matters, but imperfection is acceptable — the user always knows what jersey they have.
+A supporting feature, not a differentiator. Saves the user from typing metadata manually. If the AI is confident (≥ 0.7), it pre-fills fields on the add-kit form. If not, the user fills them in manually or uses Catalog search. Recognition runs via Supabase Edge Function `recognize-kit` (Gemini Flash); the API key never ships in the client. Accuracy matters, but imperfection is acceptable — the user always knows what jersey they have. See ADR-0003, issue #8.
 
 ### Locker Entry
 The database record representing one Kit in a user's Locker. Fields: { id, userId, kitCatalogId, teamName, leagueId, season, playerName, number, condition, notes, photos[], visualizationUrl, isFavourite, createdAt }.
@@ -71,8 +71,21 @@ lib/
         locker_entries_notifier.dart ← LockerEntriesNotifier + sortLockerEntries() + lockerEntriesProvider
       screens/
         locker_screen.dart          ← grid view, kit count header, FAB → /locker/add
-        locker_entry_form_screen.dart ← add/edit formu, validation + "Catalog'dan ara" (kitCatalogId/leagueId)
+        locker_entry_form_screen.dart ← add/edit formu, foto + AI recognition (add only), Catalog arama, validation
         locker_entry_detail_screen.dart ← detay, favori toggle, düzenleme, confirmation delete
+    recognition/
+      models/
+        kit_recognition_result.dart     ← Gemini JSON (team, league, season, playerName, number, confidence)
+        kit_recognition_form_values.dart ← pre-fill DTO for form controllers
+      kit_recognition_config.dart       ← confidenceThreshold = 0.7
+      kit_recognition_prefill.dart        ← threshold → KitRecognitionFormValues?
+      kit_recognition_catalog_matcher.dart ← AI output → KitCatalogEntry? via KitCatalogSearcher
+      kit_recognition_repository.dart     ← abstract recognize(Uint8List)
+      supabase_kit_recognition_repository.dart ← functions.invoke('recognize-kit')
+      recognition_coordinator.dart        ← repo + catalog + RecognitionOutcome
+      recognition_outcome.dart            ← RecognitionPrefillSuggested | RecognitionManualEntry
+      locker_entry_recognition_applier.dart ← skip pre-fill if user already typed team/season
+      providers/recognition_provider.dart ← kitRecognitionRepositoryProvider, recognitionCoordinatorProvider
     catalog/
       models/
         kit_type.dart                 ← enum KitType { home, away, third }
@@ -88,6 +101,8 @@ lib/
       photo_compressor.dart         ← abstract interface PhotoCompressor { compress(Uint8List) → Future<Uint8List> }
       flutter_image_compress_photo_compressor.dart ← FlutterImageCompressPhotoCompressor — WebP format, quality 85
       photo_providers.dart          ← photoRepositoryProvider + photoCompressorProvider (Provider<T>)
+      image_picker_service.dart     ← abstract pickImage(ImageSource); ImagePickerServiceImpl
+      providers/image_picker_provider.dart ← imagePickerServiceProvider (test override)
     feed/ | showcase/ | social/ | notifications/
   l10n/
     app_en.arb | app_tr.arb         ← string kaynakları
@@ -96,13 +111,19 @@ test/
   helpers/
     auth_fakes.dart                       ← FakeAuthNotifier (paylaşılan test fake, tüm auth testleri kullanır)
     locker_fakes.dart                     ← FakeLockerEntriesNotifier + fakeEntry() yardımcısı
-    photo_fakes.dart                      ← FakePhotoRepository (returnUrl, shouldThrow, lastUploadedBytes/UserId) + FakePhotoCompressor (shouldThrow, lastInput)
+    photo_fakes.dart                      ← FakePhotoRepository + FakePhotoCompressor
+    recognition_fakes.dart                ← FakeKitRecognitionRepository + FakeImagePickerService
   core/auth/username_validator_test.dart  ← 11 unit test (length, regex, edge cases)
   core/routing/app_router_test.dart       ← auth redirect davranışları (4 test)
   features/auth/auth_screen_test.dart     ← sign-up + sign-in form widget testleri (5 test)
   features/home/home_screen_test.dart     ← TR/EN lokalizasyon (2 test)
   features/catalog/
     kit_catalog_searcher_test.dart        ← 6 unit test (fuzzy, filtreler, ambiguous, unknown)
+  features/recognition/
+    kit_recognition_prefill_test.dart     ← 2 unit test (yüksek/düşük confidence)
+    kit_recognition_catalog_matcher_test.dart ← 2 unit test (exact + typo fuzzy)
+    recognition_coordinator_test.dart     ← 3 unit test (prefill, low confidence, error)
+    locker_entry_recognition_applier_test.dart ← 2 unit test (prefill, user already filled)
   features/locker/
     locker_entries_notifier_test.dart     ← 11 unit test (sortLockerEntries:2, state transitions:7, foto pipeline:2)
     locker_screen_test.dart               ← 8 widget test (grid:4, form:4 incl. catalog seçimi)
@@ -110,7 +131,7 @@ test/
     photo_repository_test.dart            ← 2 unit test (başarılı upload URL, exception fırlatma)
     photo_compressor_test.dart            ← 2 unit test (non-empty bytes döner, exception fırlatma)
   widget_test.dart                        ← smoke test
-Toplam: 52 test GREEN
+Toplam: 61 test GREEN
 tool/
   seed_kit_catalog.dart                   ← FKAPI → kit_catalog idempotent upsert (FKAPI_BASE_URL veya dev fixture)
 supabase/
@@ -122,6 +143,8 @@ supabase/
     20260514234158_grant_profiles_to_authenticated.sql   ← GRANT SELECT/INSERT/UPDATE on profiles
     20260514234544_grant_locker_entries_to_authenticated.sql ← GRANT SELECT/INSERT/UPDATE/DELETE on locker_entries
     20260519000001_create_kit_catalog.sql     ← kit_catalog tablosu, RLS read-only, locker_entries FK
+  functions/
+    recognize-kit/index.ts                  ← Gemini Flash vision → structured kit metadata (GEMINI_API_KEY secret)
 ```
 
 **Auth redirect mantığı:** `AuthLoading → /splash`, `Authenticated → /home`, `Unauthenticated → /auth`, `AuthError → /auth`
@@ -136,6 +159,8 @@ supabase/
 
 **CatalogRepository pattern:** `abstract class CatalogRepository { fetchCatalog() }` — `SupabaseCatalogRepository` `kit_catalog` tablosunu okur. `kitCatalogProvider` FutureProvider ile cache'ler. Form: `showCatalogSearchSheet()` → seçim `teamName`/`season` doldurur, submit `kitCatalogId` + `leagueId` gönderir.
 
+**KitRecognition pattern:** `RecognitionCoordinator.recognize(imageBytes, catalog)` → `RecognitionOutcome`. Form compresses picked photo via `PhotoCompressor` (WebP) before invoke. `SupabaseKitRecognitionRepository` calls Edge Function `recognize-kit` with base64 WebP; Edge Function sends `image/webp` to Gemini. Returns `KitRecognitionResult`. `KitRecognitionPrefill.suggest(result)` returns form values when `confidence >= KitRecognitionConfig.confidenceThreshold` (0.7) and team/season present. `KitRecognitionCatalogMatcher.match(catalog, result)` picks best `KitCatalogEntry` via `KitCatalogSearcher`. `LockerEntryRecognitionApplier.apply(outcome, currentTeamName, currentSeason)` skips pre-fill if user already entered team or season. Form: after `pickImage` on add flow → loading (`form_recognition_loading`) → pre-fill or SnackBar on error; kit save never blocked.
+
 **sortLockerEntries:** `lib/features/locker/providers/locker_entries_notifier.dart`'da top-level pure function. Sıralama: `isFavourite: true` önce, sonra `createdAt` desc. Hem notifier hem test fake aynı fonksiyonu kullanır.
 
 **Test override pattern (auth):** `authStateProvider.overrideWith(() => FakeAuthNotifier())` — `FakeAuthNotifier extends AuthNotifier`, `lastRegisterCall` / `lastSignInCall` alanları ile çağrı doğrulama.
@@ -147,6 +172,8 @@ supabase/
 **PhotoCompressor pattern:** `abstract interface class PhotoCompressor` — tek metot: `compress(Uint8List bytes) → Future<Uint8List>`. Implementasyon: `FlutterImageCompressPhotoCompressor(quality: 85)` — `flutter_image_compress` paketini kullanır, WebP format, quality 85. Provider: `photoCompressorProvider = Provider<PhotoCompressor>(_ => const FlutterImageCompressPhotoCompressor())`.
 
 **Test fakes (photos):** `FakePhotoRepository(returnUrl, shouldThrow)` — `lastUploadedBytes` / `lastUploadedUserId` capture alanları. `FakePhotoCompressor(shouldThrow)` — `lastInput` capture alanı, tek byte dönerek sıkıştırmayı simüle eder.
+
+**Test fakes (recognition):** `FakeKitRecognitionRepository(result, shouldThrow)` — `lastImageBytes` capture. `FakeImagePickerService(file)` — overrides `imagePickerServiceProvider` for form tests. Recognition behavior is covered by unit tests on coordinator/prefill/applier (not widget tests with `Image.file`).
 
 **Form widget test pattern:** `LockerEntryFormScreen` widget testleri için gerekli override'lar: `authStateProvider` (→ `FakeAuthNotifier(Authenticated(userId: 'test-user'))`), `lockerEntriesProvider`, `photoRepositoryProvider`, `photoCompressorProvider`. ListView lazy-build nedeniyle submit butonu varsayılan 600px viewport'ta element tree'e girmiyor — `tester.view.physicalSize = const Size(800, 2000)` ile viewport büyütülmeli (tearDown'da `tester.view.resetPhysicalSize`). Hata yolu testi için `_ThrowingLockerEntriesNotifier extends LockerEntriesNotifier` (add() throws) lokal fake olarak test dosyasında tanımlanır.
 
@@ -216,4 +243,12 @@ RLS aktif. Policy: `kit_catalog_select_authenticated` — authenticated kullanı
 | `kit-renders` | Public read, owner write | `{userId}/{uuid}.webp` | Ghost Mannequin render çıktıları |
 | `avatars` | Public read, owner write | `{userId}/avatar.webp` | Profil fotoğrafları |
 
-`kit-photos` bucket V1'de implement edildi. `kit-renders` ve `avatars` Ghost Mannequin (#9) ve profil (#10) issue'larında eklenecek.
+`kit-photos` bucket V1'de implement edildi. `kit-renders` ve `avatars` Ghost Mannequin (#9+) ve profil issue'larında eklenecek.
+
+## Supabase Edge Functions (V1)
+
+| Function | Secret(s) | Purpose |
+|----------|-----------|---------|
+| `recognize-kit` | `GEMINI_API_KEY`, optional `GEMINI_MODEL` | Jersey photo → structured metadata via Gemini Flash (#8) |
+
+Deploy: `supabase functions deploy recognize-kit`. Client invokes via `Supabase.instance.client.functions.invoke('recognize-kit', body: { imageBase64 })`.
