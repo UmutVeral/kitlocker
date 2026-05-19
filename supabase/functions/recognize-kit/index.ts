@@ -50,7 +50,7 @@ Use null for unknown fields. season format like "2024-25".`;
               { text: prompt },
               {
                 inline_data: {
-                  mime_type: "image/jpeg",
+                  mime_type: "image/webp",
                   data: imageBase64,
                 },
               },

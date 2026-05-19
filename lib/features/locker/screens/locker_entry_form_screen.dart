@@ -7,6 +7,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../catalog/models/kit_catalog_entry.dart';
 import '../../catalog/providers/catalog_provider.dart';
 import '../../catalog/widgets/catalog_search_sheet.dart';
+import '../../photos/photo_providers.dart';
 import '../../photos/providers/image_picker_provider.dart';
 import '../../recognition/locker_entry_recognition_applier.dart';
 import '../../recognition/providers/recognition_provider.dart';
@@ -92,7 +93,9 @@ class _LockerEntryFormScreenState
     setState(() => _isRecognizing = true);
     try {
       final catalog = await ref.read(kitCatalogProvider.future);
-      final bytes = await file.readAsBytes();
+      final rawBytes = await file.readAsBytes();
+      final compressor = ref.read(photoCompressorProvider);
+      final bytes = await compressor.compress(rawBytes);
       final coordinator = ref.read(recognitionCoordinatorProvider);
       final outcome = await coordinator.recognize(
         imageBytes: bytes,
