@@ -7,7 +7,9 @@ import 'package:kitlocker/features/catalog/models/kit_type.dart';
 import 'package:kitlocker/features/catalog/providers/catalog_provider.dart';
 import 'package:kitlocker/features/locker/models/locker_condition.dart';
 import 'package:kitlocker/features/locker/models/locker_entry.dart';
+import 'package:kitlocker/features/locker/models/locker_filter.dart';
 import 'package:kitlocker/features/locker/providers/locker_entries_notifier.dart';
+import 'package:kitlocker/features/locker/providers/locker_filter_provider.dart';
 import 'package:kitlocker/features/locker/screens/locker_entry_form_screen.dart';
 import 'package:kitlocker/features/locker/screens/locker_screen.dart';
 import '../../helpers/locker_fakes.dart';
@@ -111,6 +113,54 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byIcon(Icons.star), findsOneWidget);
+    });
+
+    testWidgets(
+        'aktif filtre sonuç üretemediğinde "Sonuç bulunamadı" gösterilir',
+        (tester) async {
+      final notifier = FakeLockerEntriesNotifier([
+        fakeEntry(id: 'e1', teamName: 'Galatasaray'),
+      ]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            lockerEntriesProvider.overrideWith(() => notifier),
+            lockerFilterProvider
+                .overrideWith((ref) => const LockerFilter(team: 'Trabzonspor')),
+          ],
+          child: const MaterialApp(home: LockerScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('locker_empty_filter_text')), findsOneWidget);
+      expect(find.text('Sonuç bulunamadı.'), findsOneWidget);
+      expect(
+          find.byKey(const Key('locker_clear_filters_button')), findsOneWidget);
+    });
+
+    testWidgets('Filtreleri Temizle butonu filtreyi sıfırlar', (tester) async {
+      final notifier = FakeLockerEntriesNotifier([
+        fakeEntry(id: 'e1', teamName: 'Galatasaray'),
+      ]);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            lockerEntriesProvider.overrideWith(() => notifier),
+            lockerFilterProvider
+                .overrideWith((ref) => const LockerFilter(team: 'Trabzonspor')),
+          ],
+          child: const MaterialApp(home: LockerScreen()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byKey(const Key('locker_clear_filters_button')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Galatasaray'), findsOneWidget);
+      expect(
+          find.byKey(const Key('locker_empty_filter_text')), findsNothing);
     });
   });
 
