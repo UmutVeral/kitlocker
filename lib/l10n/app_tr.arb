@@ -1,4 +1,12 @@
 {
   "@@locale": "tr",
-  "homeGreeting": "KitLocker'a hoş geldin"
+  "homeGreeting": "KitLocker'a hoş geldin",
+  "lockerTab": "Locker",
+  "profileTab": "Profil",
+  "followButton": "Takip Et",
+  "unfollowButton": "Takipten Çık",
+  "followersLabel": "Takipçi",
+  "followingLabel": "Takip",
+  "noFollowers": "Henüz takipçi yok",
+  "noFollowing": "Henüz kimseyi takip etmiyor"
 }

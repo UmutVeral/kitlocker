@@ -3,5 +3,21 @@
   "homeGreeting": "Welcome to KitLocker",
   "@homeGreeting": {
     "description": "Greeting shown on the home screen"
-  }
+  },
+  "lockerTab": "Locker",
+  "@lockerTab": { "description": "Bottom nav tab for kit collection" },
+  "profileTab": "Profile",
+  "@profileTab": { "description": "Bottom nav tab for user profile" },
+  "followButton": "Follow",
+  "@followButton": { "description": "Button to follow a user" },
+  "unfollowButton": "Unfollow",
+  "@unfollowButton": { "description": "Button to unfollow a user" },
+  "followersLabel": "Followers",
+  "@followersLabel": { "description": "Label for followers count" },
+  "followingLabel": "Following",
+  "@followingLabel": { "description": "Label for following count" },
+  "noFollowers": "No followers yet",
+  "@noFollowers": { "description": "Empty state for followers list" },
+  "noFollowing": "Not following anyone yet",
+  "@noFollowing": { "description": "Empty state for following list" }
 }

@@ -6,6 +6,9 @@ import '../../features/locker/screens/locker_entry_detail_screen.dart';
 import '../../features/locker/screens/locker_entry_form_screen.dart';
 import '../../features/locker/screens/locker_screen.dart';
 import '../../features/onboarding/screens/onboarding_camera_screen.dart';
+import '../../features/social/screens/followers_screen.dart';
+import '../../features/social/screens/following_screen.dart';
+import '../../features/social/screens/profile_screen.dart';
 import '../../features/splash/screens/splash_screen.dart';
 import 'app_routes.dart';
 import 'router_notifier.dart';
@@ -37,6 +40,23 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (_, state) => LockerEntryDetailScreen(
               id: state.pathParameters['id']!,
             ),
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/profile/:userId',
+        builder: (_, state) =>
+            ProfileScreen(userId: state.pathParameters['userId']!),
+        routes: [
+          GoRoute(
+            path: 'followers',
+            builder: (_, state) =>
+                FollowersScreen(userId: state.pathParameters['userId']!),
+          ),
+          GoRoute(
+            path: 'following',
+            builder: (_, state) =>
+                FollowingScreen(userId: state.pathParameters['userId']!),
           ),
         ],
       ),

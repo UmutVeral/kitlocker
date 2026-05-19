@@ -103,6 +103,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Welcome to KitLocker'**
   String get homeGreeting;
+
+  /// Bottom nav tab for kit collection
+  ///
+  /// In en, this message translates to:
+  /// **'Locker'**
+  String get lockerTab;
+
+  /// Bottom nav tab for user profile
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileTab;
+
+  /// Button to follow a user
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get followButton;
+
+  /// Button to unfollow a user
+  ///
+  /// In en, this message translates to:
+  /// **'Unfollow'**
+  String get unfollowButton;
+
+  /// Label for followers count
+  ///
+  /// In en, this message translates to:
+  /// **'Followers'**
+  String get followersLabel;
+
+  /// Label for following count
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get followingLabel;
+
+  /// Empty state for followers list
+  ///
+  /// In en, this message translates to:
+  /// **'No followers yet'**
+  String get noFollowers;
+
+  /// Empty state for following list
+  ///
+  /// In en, this message translates to:
+  /// **'Not following anyone yet'**
+  String get noFollowing;
 }
 
 class _AppLocalizationsDelegate

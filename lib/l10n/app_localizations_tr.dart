@@ -10,4 +10,28 @@ class AppLocalizationsTr extends AppLocalizations {
 
   @override
   String get homeGreeting => 'KitLocker\'a hoş geldin';
+
+  @override
+  String get lockerTab => 'Locker';
+
+  @override
+  String get profileTab => 'Profil';
+
+  @override
+  String get followButton => 'Takip Et';
+
+  @override
+  String get unfollowButton => 'Takipten Çık';
+
+  @override
+  String get followersLabel => 'Takipçi';
+
+  @override
+  String get followingLabel => 'Takip';
+
+  @override
+  String get noFollowers => 'Henüz takipçi yok';
+
+  @override
+  String get noFollowing => 'Henüz kimseyi takip etmiyor';
 }
